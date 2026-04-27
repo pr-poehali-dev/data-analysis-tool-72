@@ -34,7 +34,7 @@ export default function Hero() {
         <p className="text-base md:text-xl max-w-xl mx-auto opacity-80 mb-10">
           Быстрые матчи, реальные тактики. Стреляй первым — выживай дольше.
         </p>
-        <a href="#play" className="inline-block bg-red-600 hover:bg-red-700 text-white uppercase tracking-widest text-sm px-8 py-3 transition-all duration-300 font-bold">
+        <a href="#modes" className="inline-block bg-red-600 hover:bg-red-700 text-white uppercase tracking-widest text-sm px-8 py-3 transition-all duration-300 font-bold cursor-pointer">
           Начать игру
         </a>
       </div>
