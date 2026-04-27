@@ -49,7 +49,7 @@ const WEAPONS: WeaponDef[] = [
 ];
 
 // Bot states
-type BotState = "patrol"|"chase"|"shoot"|"strafe"|"retreat";
+type BotState = "patrol"|"chase"|"shoot"|"strafe"|"retreat"|"dying"|"dead";
 
 interface BloodParticle {
   x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number;
@@ -65,6 +65,11 @@ interface Enemy {
   state: BotState; stateTimer: number;
   strafeDir: number; patrolAngle: number;
   id: number;
+  // Death animation
+  deathTimer: number;      // 0..60 — падение
+  deathAngle: number;      // угол наклона при падении (0→π/2)
+  deathDir: number;        // 1 или -1 — сторона падения
+  deathHeadshot: boolean;  // хедшот — особая анима
 }
 
 // ── Textures ─────────────────────────────────────────────────────
@@ -294,10 +299,18 @@ function drawMinimap(
   ctx.strokeStyle="rgba(80,20,10,0.3)"; ctx.lineWidth=0.3;
   for(let i=0;i<=MAP_W;i++){ctx.beginPath();ctx.moveTo(mx+i*cs,my);ctx.lineTo(mx+i*cs,my+ms);ctx.stroke();}
   for(let i=0;i<=MAP_H;i++){ctx.beginPath();ctx.moveTo(mx,my+i*cs);ctx.lineTo(mx+ms,my+i*cs);ctx.stroke();}
-  // Enemies
-  enemies.filter(e=>e.alive).forEach(e=>{
-    ctx.fillStyle="rgba(255,60,0,0.9)";
-    ctx.beginPath();ctx.arc(mx+e.x*cs,my+e.y*cs,2.5,0,Math.PI*2);ctx.fill();
+  // Enemies — alive=red, dying=faded, dead=grey skull
+  enemies.forEach(e=>{
+    if(e.state==="dead"){
+      ctx.fillStyle="rgba(80,80,80,0.5)";
+      ctx.font="6px serif"; ctx.fillText("✕",mx+e.x*cs-2,my+e.y*cs+2);
+    } else if(e.state==="dying"){
+      ctx.fillStyle="rgba(200,50,0,0.5)";
+      ctx.beginPath();ctx.arc(mx+e.x*cs,my+e.y*cs,2,0,Math.PI*2);ctx.fill();
+    } else if(e.alive){
+      ctx.fillStyle="rgba(255,60,0,0.9)";
+      ctx.beginPath();ctx.arc(mx+e.x*cs,my+e.y*cs,2.5,0,Math.PI*2);ctx.fill();
+    }
   });
   // Player dot + FOV cone
   const px=mx+player.x*cs, py=my+player.y*cs;
@@ -349,13 +362,13 @@ export default function Game() {
 
   const initEnemies=useCallback(()=>{
     S.current.enemies=[
-      {x:5.5,y:2.5,hp:100,maxHp:100,alive:true,shootCooldown:120,hitFlash:0,walkPhase:0,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:0,id:0},
-      {x:13.5,y:7.5,hp:100,maxHp:100,alive:true,shootCooldown:180,hitFlash:0,walkPhase:1,state:"patrol",stateTimer:0,strafeDir:-1,patrolAngle:1.5,id:1},
-      {x:7.5,y:13.5,hp:100,maxHp:100,alive:true,shootCooldown:90,hitFlash:0,walkPhase:2,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:3,id:2},
-      {x:2.5,y:9.5,hp:100,maxHp:100,alive:true,shootCooldown:150,hitFlash:0,walkPhase:0.5,state:"patrol",stateTimer:0,strafeDir:-1,patrolAngle:4.5,id:3},
-      {x:11.5,y:11.5,hp:100,maxHp:100,alive:true,shootCooldown:200,hitFlash:0,walkPhase:1.5,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:2,id:4},
-      {x:8.5,y:5.5,hp:100,maxHp:100,alive:true,shootCooldown:140,hitFlash:0,walkPhase:0.8,state:"patrol",stateTimer:0,strafeDir:-1,patrolAngle:0.8,id:5},
-      {x:3.5,y:3.5,hp:100,maxHp:100,alive:true,shootCooldown:160,hitFlash:0,walkPhase:2.5,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:2.5,id:6},
+      {x:5.5,y:2.5,hp:100,maxHp:100,alive:true,shootCooldown:120,hitFlash:0,walkPhase:0,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:0,id:0,deathTimer:0,deathAngle:0,deathDir:1,deathHeadshot:false},
+      {x:13.5,y:7.5,hp:100,maxHp:100,alive:true,shootCooldown:180,hitFlash:0,walkPhase:1,state:"patrol",stateTimer:0,strafeDir:-1,patrolAngle:1.5,id:1,deathTimer:0,deathAngle:0,deathDir:-1,deathHeadshot:false},
+      {x:7.5,y:13.5,hp:100,maxHp:100,alive:true,shootCooldown:90,hitFlash:0,walkPhase:2,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:3,id:2,deathTimer:0,deathAngle:0,deathDir:1,deathHeadshot:false},
+      {x:2.5,y:9.5,hp:100,maxHp:100,alive:true,shootCooldown:150,hitFlash:0,walkPhase:0.5,state:"patrol",stateTimer:0,strafeDir:-1,patrolAngle:4.5,id:3,deathTimer:0,deathAngle:0,deathDir:-1,deathHeadshot:false},
+      {x:11.5,y:11.5,hp:100,maxHp:100,alive:true,shootCooldown:200,hitFlash:0,walkPhase:1.5,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:2,id:4,deathTimer:0,deathAngle:0,deathDir:1,deathHeadshot:false},
+      {x:8.5,y:5.5,hp:100,maxHp:100,alive:true,shootCooldown:140,hitFlash:0,walkPhase:0.8,state:"patrol",stateTimer:0,strafeDir:-1,patrolAngle:0.8,id:5,deathTimer:0,deathAngle:0,deathDir:-1,deathHeadshot:false},
+      {x:3.5,y:3.5,hp:100,maxHp:100,alive:true,shootCooldown:160,hitFlash:0,walkPhase:2.5,state:"patrol",stateTimer:0,strafeDir:1,patrolAngle:2.5,id:6,deathTimer:0,deathAngle:0,deathDir:1,deathHeadshot:false},
     ];
   },[]);
 
@@ -422,25 +435,20 @@ export default function Game() {
           rx+=dx*0.035;ry+=dy*0.035;
           if(mapAt(rx,ry)===1){hit=true;break;}
           for(const e of s.enemies){
-            if(!e.alive)continue;
+            if(!e.alive||e.state==="dying"||e.state==="dead")continue;
             const dd=Math.sqrt((e.x-rx)**2+(e.y-ry)**2);
 
-            // Hitbox zones: head (top), body (middle), legs (bottom)
-            // We project enemy height to determine zone
-            const dist2=Math.sqrt((e.x-s.player.x)**2+(e.y-s.player.y)**2);
-            const h=H/dist2*0.95;
-            const cy=HALF_H-h*0.5;
-            const headTop=cy, headBot=cy+h*0.3;
-            const bodyBot=cy+h*0.7;
-
             if(dd<0.38){
-              // Determine hit zone by checking ray height
-              // Approximate: use distance to get expected screen Y
-              const rayFrac=(rx-s.player.x)/(dx||0.0001);
-              const screenY=HALF_H; // center aim
+              // Hitbox zones based on distance-projected height
+              const dist2=Math.sqrt((e.x-s.player.x)**2+(e.y-s.player.y)**2);
+              const eh=H/dist2*0.95;
+              const eCy=HALF_H-eh*0.5;
+              const headBot=eCy+eh*0.3;
+              const bodyBot=eCy+eh*0.7;
+              const screenY=HALF_H; // crosshair center
               let mult=1.0;
               let isHead=false;
-              if(screenY>=headTop&&screenY<headBot){ mult=2.5; isHead=true; }
+              if(screenY>=eCy&&screenY<headBot){ mult=2.5; isHead=true; }
               else if(screenY>=headBot&&screenY<bodyBot){ mult=1.0; }
               else { mult=0.6; }
 
@@ -454,11 +462,15 @@ export default function Game() {
               s.labels.push({worldX:e.x,worldY:e.y,value:dmg,life:60,headshot:isHead});
               if(isHead){setHeadshotMsg("ХЕДШОТ!");setTimeout(()=>setHeadshotMsg(""),1000);}
 
-              if(e.hp<=0){
-                e.alive=false;s.score++;
+              if(e.hp<=0 && e.state!=="dying" && e.state!=="dead"){
+                e.state="dying";
+                e.deathTimer=0;
+                e.deathDir=Math.random()>0.5?1:-1;
+                e.deathHeadshot=isHead;
+                spawnBlood(e.x,e.y,isHead?50:25);
+                s.score++;
                 s.money+=isHead?350:220;
                 setScore(s.score);setMoney(s.money);
-                if(s.enemies.every(en=>!en.alive))setTimeout(()=>initEnemies(),1000);
               }
               break;
             }
@@ -540,9 +552,30 @@ export default function Game() {
 
       // ── Bot AI ──────────────────────────────────────────────────
       s.enemies.forEach(e=>{
+        if(e.hitFlash>0)e.hitFlash--;
+
+        // ── Death animation ──
+        if(e.state==="dying"){
+          e.deathTimer++;
+          // Advance fall angle toward π/2 (lying flat)
+          const targetAngle=Math.PI/2;
+          e.deathAngle=Math.min(targetAngle, e.deathAngle + (e.deathHeadshot?0.065:0.045));
+          // Spray blood while falling
+          if(e.deathTimer<20 && e.deathTimer%4===0) spawnBlood(e.x,e.y,6);
+          if(e.deathAngle>=targetAngle){
+            e.state="dead";
+            e.alive=false;
+            // Check if all dead
+            if(s.enemies.every(en=>en.state==="dead"||!en.alive)){
+              setTimeout(()=>initEnemies(),1200);
+            }
+          }
+          return; // skip normal AI
+        }
+        if(e.state==="dead")return;
+
         if(!e.alive)return;
         e.walkPhase+=0.05;
-        if(e.hitFlash>0)e.hitFlash--;
         const pdx=s.player.x-e.x,pdy=s.player.y-e.y;
         const dist=Math.sqrt(pdx*pdx+pdy*pdy);
         e.stateTimer--;
@@ -645,70 +678,140 @@ export default function Game() {
       }
 
       // ── Enemies ──────────────────────────────────────────────────
-      const alive=s.enemies.filter(e=>e.alive).sort((a,b)=>{
+      // Include dying/dead for rendering
+      const visibleEnemies=[...s.enemies].sort((a,b)=>{
         const da=(a.x-s.player.x)**2+(a.y-s.player.y)**2;
         const db=(b.x-s.player.x)**2+(b.y-s.player.y)**2;
         return db-da;
       });
 
-      alive.forEach(e=>{
-        const proj=projectEnemy(e);
-        if(!proj)return;
-        const{screenX,h,dist:ed,hit}=proj;
-        const ri=Math.floor(screenX);
-        if(ri<0||ri>=W||zBuf[ri]<ed)return;
+      // Helper: draw standing enemy body
+      function drawEnemyBody(e:Enemy, screenX:number, h:number, ed:number, fallAngle=0){
         const sh=Math.max(0.18,Math.min(1,1-ed/12));
-        const cx=screenX,cy=HALF_H-h*0.5+bobY;
-        const hr=h*0.14,bw=h*0.35,bh=h*0.35,lh=h*0.26,lw=h*0.12;
+        const cx=screenX;
+        // When falling, the bottom of the sprite rises
+        const fallLift=Math.sin(fallAngle)*h*0.5*e.deathDir;
+        const baseY=HALF_H+bobY; // floor level on screen
+        // For fallen: flatten at floor level
+        const flatFactor=1-Math.sin(fallAngle); // 1=standing, 0=flat
+        const totalH=h*flatFactor;
+        const cy=baseY-totalH;
+
+        const hr=h*0.14*flatFactor, bw=h*0.35, bh=h*0.35*flatFactor, lh=h*0.26*flatFactor, lw=h*0.12;
         const wo=Math.sin(e.walkPhase)*(h*0.04);
         const col=(r:number,g:number,b:number)=>`rgba(${r*sh|0},${g*sh|0},${b*sh|0},1)`;
-        const hc=hit?"rgba(255,130,0,1)":undefined;
+        const isDead=e.state==="dead"||e.state==="dying";
+        const fallShade=isDead?0.6:1;
+
+        // Horizontal stretch when falling (body widens as it falls)
+        const stretch=1+Math.sin(fallAngle)*0.5;
+
+        ctx.save();
+        if(isDead){
+          // Pivot from feet, tilt sideways
+          ctx.translate(screenX+fallLift*0.5, baseY);
+          ctx.rotate(fallAngle*e.deathDir*0.55);
+          ctx.translate(-screenX-fallLift*0.5, -baseY);
+        }
 
         // Legs
-        ctx.fillStyle=hc||col(62,16,16);
-        ctx.fillRect(cx-lw*1.1,cy+bh+hr*2+wo,lw,lh);
-        ctx.fillRect(cx+lw*0.1,cy+bh+hr*2-wo,lw,lh);
-        ctx.fillStyle=hc||col(36,10,8);
-        ctx.fillRect(cx-lw*1.2,cy+bh+hr*2+lh+wo,lw*1.2,lh*0.18);
-        ctx.fillRect(cx,cy+bh+hr*2+lh-wo,lw*1.2,lh*0.18);
+        const legColor=col(62*fallShade|0,16,16);
+        ctx.fillStyle=legColor;
+        if(!isDead){
+          ctx.fillRect(cx-lw*1.1,cy+bh+hr*2+wo,lw,lh);
+          ctx.fillRect(cx+lw*0.1,cy+bh+hr*2-wo,lw,lh);
+          ctx.fillStyle=col(36,10,8);
+          ctx.fillRect(cx-lw*1.2,cy+bh+hr*2+lh+wo,lw*1.2,lh*0.18);
+          ctx.fillRect(cx,cy+bh+hr*2+lh-wo,lw*1.2,lh*0.18);
+        } else {
+          // Splayed legs when dead
+          ctx.fillRect(cx-lw*1.5*stretch,baseY-lh*0.5,lw*stretch,lh);
+          ctx.fillRect(cx+lw*0.3*stretch,baseY-lh*0.5,lw*stretch,lh);
+        }
+
         // Belt
-        ctx.fillStyle=hc||col(48,26,8);ctx.fillRect(cx-bw/2-2,cy+hr*2+bh*0.88,bw+4,h*0.04);
-        // Body shaded
+        ctx.fillStyle=col(48,26,8);
+        ctx.fillRect(cx-bw/2-2,cy+hr*2+bh*0.88,bw*stretch,h*0.04*flatFactor);
+
+        // Body
         const bodyG=ctx.createLinearGradient(cx-bw/2,0,cx+bw/2,0);
-        bodyG.addColorStop(0,hc||col(80,26,26));bodyG.addColorStop(0.5,hc||col(122,40,40));bodyG.addColorStop(1,hc||col(80,26,26));
-        ctx.fillStyle=bodyG;ctx.fillRect(cx-bw/2,cy+hr*2,bw,bh);
-        if(!hit){ctx.fillStyle=col(50,16,16);ctx.fillRect(cx-bw*0.25,cy+hr*2.1,bw*0.5,bh*0.68);}
-        // Arms
-        ctx.fillStyle=hc||col(70,22,22);
-        ctx.fillRect(cx-bw/2-lw+wo,cy+hr*2.2,lw,bh*0.72);
-        ctx.fillRect(cx+bw/2-wo,cy+hr*2.2,lw,bh*0.72);
-        ctx.fillStyle=hc||col(165,105,65);
-        ctx.fillRect(cx-bw/2-lw+wo,cy+hr*2.2+bh*0.68,lw,lw);
-        ctx.fillRect(cx+bw/2-wo,cy+hr*2.2+bh*0.68,lw,lw);
-        // Gun
-        ctx.fillStyle=hc||"#777";
-        ctx.fillRect(cx+bw/2-wo,cy+hr*2.55,lw*0.5,bh*0.32);
-        ctx.fillRect(cx+bw/2-wo+lw*0.12,cy+hr*2.65,h*0.14,lw*0.25);
-        // Neck
-        ctx.fillStyle=hc||col(150,90,60);ctx.fillRect(cx-hr*0.5,cy+hr*1.78,hr,hr*0.5);
-        // Head with shading
-        const hg=ctx.createRadialGradient(cx-hr*0.3,cy+hr*0.7,0,cx,cy+hr,hr);
-        hg.addColorStop(0,hc||col(190,120,82));hg.addColorStop(1,hc||col(130,70,44));
-        ctx.fillStyle=hg;ctx.beginPath();ctx.arc(cx,cy+hr,hr,0,Math.PI*2);ctx.fill();
-        // Helmet
-        ctx.fillStyle=hc||col(52,16,16);
-        ctx.beginPath();ctx.ellipse(cx,cy+hr*0.5,hr*1.1,hr*0.72,0,Math.PI,-Math.PI*2,true);ctx.fill();
-        // Visor
-        ctx.fillStyle=hit?"rgba(255,220,0,0.9)":"rgba(255,42,0,0.78)";
-        ctx.fillRect(cx-hr*0.56,cy+hr*0.66,hr*1.12,hr*0.32);
-        // Eyes
-        ctx.shadowColor=hit?"#ff0":"#f30";ctx.shadowBlur=8;
-        ctx.fillStyle=hit?"#fff":"rgba(255,60,0,1)";
-        ctx.fillRect(cx-hr*0.43,cy+hr*0.72,hr*0.22,hr*0.17);
-        ctx.fillRect(cx+hr*0.21,cy+hr*0.72,hr*0.22,hr*0.17);
-        ctx.shadowBlur=0;
-        // HP bar
-        if(ed<8){
+        bodyG.addColorStop(0,col(80*fallShade|0,26,26));
+        bodyG.addColorStop(0.5,col(122*fallShade|0,40,40));
+        bodyG.addColorStop(1,col(80*fallShade|0,26,26));
+        ctx.fillStyle=bodyG;
+        ctx.fillRect(cx-bw*stretch/2,cy+hr*2,bw*stretch,bh);
+        if(!isDead){ctx.fillStyle=col(50,16,16);ctx.fillRect(cx-bw*0.25,cy+hr*2.1,bw*0.5,bh*0.68);}
+
+        // Arms — spread out when dead
+        ctx.fillStyle=col(70*fallShade|0,22,22);
+        if(!isDead){
+          ctx.fillRect(cx-bw/2-lw+wo,cy+hr*2.2,lw,bh*0.72);
+          ctx.fillRect(cx+bw/2-wo,cy+hr*2.2,lw,bh*0.72);
+          ctx.fillStyle=col(165,105,65);
+          ctx.fillRect(cx-bw/2-lw+wo,cy+hr*2.2+bh*0.68,lw,lw);
+          ctx.fillRect(cx+bw/2-wo,cy+hr*2.2+bh*0.68,lw,lw);
+        } else {
+          // Arms splayed out to sides
+          ctx.fillRect(cx-bw*stretch,cy+hr*2.2,lw,bh*0.5);
+          ctx.fillRect(cx+bw*stretch*0.6,cy+hr*2.2,lw,bh*0.5);
+          ctx.fillStyle=col(165,105,65);
+          ctx.fillRect(cx-bw*stretch-lw,cy+hr*2.2,lw,lw);
+          ctx.fillRect(cx+bw*stretch*0.6+lw*0.5,cy+hr*2.2,lw,lw);
+        }
+
+        // Gun dropped
+        if(!isDead){
+          ctx.fillStyle=col(70*fallShade|0,22,22);
+          ctx.fillRect(cx+bw/2-wo,cy+hr*2.55,lw*0.5,bh*0.32);
+          ctx.fillRect(cx+bw/2-wo+lw*0.12,cy+hr*2.65,h*0.14,lw*0.25);
+        } else {
+          ctx.fillStyle="#666";
+          ctx.fillRect(cx+bw*stretch*0.5,baseY-lh*0.3,h*0.2,lw*0.4);
+        }
+
+        // Neck + Head
+        if(flatFactor>0.05){
+          ctx.fillStyle=col(150,90,60);
+          ctx.fillRect(cx-hr*0.5,cy+hr*1.78,hr,hr*0.5*flatFactor);
+          const hg2=ctx.createRadialGradient(cx-hr*0.3,cy+hr*0.7,0,cx,cy+hr*flatFactor,hr*Math.max(0.1,flatFactor));
+          hg2.addColorStop(0,col(190*fallShade|0,120,82));
+          hg2.addColorStop(1,col(130*fallShade|0,70,44));
+          ctx.fillStyle=hg2;
+          ctx.beginPath();ctx.ellipse(cx,cy+hr,hr*Math.max(1,stretch*0.7),hr*Math.max(0.1,flatFactor),0,0,Math.PI*2);ctx.fill();
+
+          // Helmet
+          ctx.fillStyle=col(52*fallShade|0,16,16);
+          if(flatFactor>0.3){
+            ctx.beginPath();ctx.ellipse(cx,cy+hr*0.5,hr*1.1,hr*0.72*flatFactor,0,Math.PI,-Math.PI*2,true);ctx.fill();
+          }
+
+          // Visor / eyes — X eyes when dead
+          if(isDead){
+            // X eyes
+            ctx.strokeStyle="rgba(255,255,255,0.7)"; ctx.lineWidth=Math.max(1,hr*0.15);
+            const ex1=cx-hr*0.4, ex2=cx+hr*0.15, ey=cy+hr*0.72;
+            ctx.beginPath();ctx.moveTo(ex1-hr*0.1,ey-hr*0.1);ctx.lineTo(ex1+hr*0.1,ey+hr*0.1);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(ex1+hr*0.1,ey-hr*0.1);ctx.lineTo(ex1-hr*0.1,ey+hr*0.1);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(ex2-hr*0.1,ey-hr*0.1);ctx.lineTo(ex2+hr*0.1,ey+hr*0.1);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(ex2+hr*0.1,ey-hr*0.1);ctx.lineTo(ex2-hr*0.1,ey+hr*0.1);ctx.stroke();
+            // Tongue out on headshot
+            if(e.deathHeadshot){
+              ctx.fillStyle="#f55"; ctx.beginPath();
+              ctx.ellipse(cx,cy+hr*1.2,hr*0.2,hr*0.35,0,0,Math.PI*2);ctx.fill();
+            }
+          } else {
+            ctx.fillStyle="rgba(255,42,0,0.78)";
+            ctx.fillRect(cx-hr*0.56,cy+hr*0.66,hr*1.12,hr*0.32);
+            ctx.shadowColor="#f30";ctx.shadowBlur=8;
+            ctx.fillStyle="rgba(255,60,0,1)";
+            ctx.fillRect(cx-hr*0.43,cy+hr*0.72,hr*0.22,hr*0.17);
+            ctx.fillRect(cx+hr*0.21,cy+hr*0.72,hr*0.22,hr*0.17);
+            ctx.shadowBlur=0;
+          }
+        }
+
+        // HP bar — only alive
+        if(!isDead && ed<8){
           ctx.fillStyle="rgba(0,0,0,0.75)";ctx.fillRect(cx-h*0.32,cy-12,h*0.64,6);
           const hpRatio=e.hp/e.maxHp;
           ctx.fillStyle=hpRatio>0.5?"#22c55e":hpRatio>0.25?"#f59e0b":"#ef4444";
@@ -718,6 +821,28 @@ export default function Game() {
             ctx.textAlign="center";ctx.fillText(`${Math.max(0,e.hp)}`,cx,cy-14);ctx.textAlign="left";
           }
         }
+
+        ctx.restore();
+      }
+
+      visibleEnemies.forEach(e=>{
+        if(e.state==="dead"||e.state==="dying"){
+          // Project dead enemy
+          const proj=projectEnemy(e);
+          if(!proj)return;
+          const{screenX,h,dist:ed}=proj;
+          const ri=Math.floor(screenX);
+          if(ri<0||ri>=W||zBuf[ri]<ed*0.9)return;
+          drawEnemyBody(e,screenX,h,ed,e.deathAngle);
+          return;
+        }
+        if(!e.alive)return;
+        const proj=projectEnemy(e);
+        if(!proj)return;
+        const{screenX,h,dist:ed}=proj;
+        const ri=Math.floor(screenX);
+        if(ri<0||ri>=W||zBuf[ri]<ed)return;
+        drawEnemyBody(e,screenX,h,ed,0);
       });
 
       // ── Blood particles projected ─────────────────────────────────
