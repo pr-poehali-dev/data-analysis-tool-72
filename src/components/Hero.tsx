@@ -1,7 +1,9 @@
 import { useScroll, useTransform, motion } from "framer-motion";
 import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Hero() {
+  const navigate = useNavigate();
   const container = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: container,
@@ -34,9 +36,9 @@ export default function Hero() {
         <p className="text-base md:text-xl max-w-xl mx-auto opacity-80 mb-10">
           Быстрые матчи, реальные тактики. Стреляй первым — выживай дольше.
         </p>
-        <a href="#modes" className="inline-block bg-red-600 hover:bg-red-700 text-white uppercase tracking-widest text-sm px-8 py-3 transition-all duration-300 font-bold cursor-pointer">
+        <button onClick={() => navigate("/game")} className="inline-block bg-red-600 hover:bg-red-700 text-white uppercase tracking-widest text-sm px-8 py-3 transition-all duration-300 font-bold cursor-pointer">
           Начать игру
-        </a>
+        </button>
       </div>
     </div>
   );

@@ -1,8 +1,11 @@
+import { useNavigate } from "react-router-dom";
+
 interface HeaderProps {
   className?: string;
 }
 
 export default function Header({ className }: HeaderProps) {
+  const navigate = useNavigate();
   return (
     <header className={`absolute top-0 left-0 right-0 z-10 p-6 ${className ?? ""}`}>
       <div className="flex justify-between items-center">
@@ -14,12 +17,12 @@ export default function Header({ className }: HeaderProps) {
           >
             Режимы
           </a>
-          <a
-            href="#play"
-            className="text-white hover:text-red-400 transition-colors duration-300 uppercase text-sm border border-red-500 px-4 py-1"
+          <button
+            onClick={() => navigate("/game")}
+            className="text-white hover:text-red-400 transition-colors duration-300 uppercase text-sm border border-red-500 px-4 py-1 cursor-pointer"
           >
             Играть
-          </a>
+          </button>
         </nav>
       </div>
     </header>

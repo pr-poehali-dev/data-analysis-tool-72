@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 const modes = [
   { title: "1 на 1", desc: "Дуэль без права на ошибку. Один выстрел решает всё." },
   { title: "Команда vs Команда", desc: "5v5 тактические раунды. Координация — ключ к победе." },
@@ -5,6 +7,7 @@ const modes = [
 ];
 
 export default function Featured() {
+  const navigate = useNavigate();
   return (
     <div id="modes" className="flex flex-col lg:flex-row lg:justify-between lg:items-center min-h-screen px-6 py-12 lg:py-0 bg-neutral-950">
       <div className="flex-1 h-[400px] lg:h-[800px] mb-8 lg:mb-0 lg:order-2 relative">
@@ -28,7 +31,7 @@ export default function Featured() {
             </div>
           ))}
         </div>
-        <button className="bg-red-600 text-white border border-red-600 px-6 py-3 text-sm transition-all duration-300 hover:bg-transparent hover:text-red-500 cursor-pointer w-fit uppercase tracking-widest font-bold">
+        <button onClick={() => navigate("/game")} className="bg-red-600 text-white border border-red-600 px-6 py-3 text-sm transition-all duration-300 hover:bg-transparent hover:text-red-500 cursor-pointer w-fit uppercase tracking-widest font-bold">
           Играть сейчас
         </button>
       </div>
